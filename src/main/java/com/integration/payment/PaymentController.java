@@ -1,10 +1,11 @@
 package com.integration.payment;
 
-import com.squareup.okhttp.MediaType;
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
-import org.springframework.http.HttpStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.json.JSONObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,39 +17,37 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.Map;
-
-import static org.springframework.http.HttpStatus.*;
+import java.util.Objects;
 
 @RestController
 public class PaymentController {
 
-    @PostMapping("/callback")
-    public ResponseEntity<PaymentCallBack> getCallback(PaymentCallBack callBack){
-        return ResponseEntity.ok(callBack);
+    @GetMapping
+    public String welcome(){
+        return "Welcome guys";
     }
 
-    @PostMapping("/pay")
-    public ResponseEntity<Map<String, Response>> processPayment(@RequestBody Payment payment){
 
-        Response res = null;
+    @PostMapping("/pay")
+    public ResponseEntity<Map<String, ?>> processPayment(@RequestBody Payment payment){
+
+        Response res;
 
         /* Extract Info from object */
-        String customerName = payment.getNames();
         String amount = String.valueOf(payment.getAmount());
         String phoneNumber = payment.getPhoneNumber();
         String shortCode = "174379";
 
-
         try {
 
             res = pay(phoneNumber, amount, shortCode);
+            return ResponseEntity.ok(Map.of("Success", res));
 
         } catch (IOException exception){
-            return ResponseEntity.status(INTERNAL_SERVER_ERROR).body(Map.of("An error occurred", res));
+            return ResponseEntity.ok(Map.of("An error occurred", exception.getMessage()));
         }
-
-        return ResponseEntity.ok(Map.of("Success", res));
     }
 
     private Response pay(String phoneNumber,
@@ -56,35 +55,44 @@ public class PaymentController {
                      String shortCode) throws IOException {
 
         OkHttpClient client = new OkHttpClient();
-        MediaType mediaType = MediaType.parse("application/json");
 
         String timeStamp = new SimpleDateFormat("YYYYMMDDHHmmss").format(new Timestamp(System.currentTimeMillis()));
-        byte[] timeStampByte = timeStamp.getBytes(StandardCharsets.UTF_8);
-        String password = Base64.getEncoder().encodeToString(timeStampByte);
 
+        String pwdFields = "174379bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919" + timeStamp;
 
-        String payload =  "{" +
-                "'BusinessShortCode' : " + shortCode +
-                "'Password' : " + password +
-                "'Timestamp':" + timeStamp +
-                "'Amount': " + amount +
-                "'PartyA':" + phoneNumber +
-                "'PartyB': 174379," +
-                "'PhoneNumber': 254790838747," +
-                "'CallBackURL': 'https://datasyde.co.ke'," +
-                "'AccountReference': 'CompanyXLTD'," +
-                "'TransactionDesc': 'Payment of X'"+
-                "}";
+        byte[] pwdBytes = pwdFields.getBytes(StandardCharsets.UTF_8);
 
-        com.squareup.okhttp.RequestBody body = com.squareup.okhttp.RequestBody.create(mediaType, payload);
+        String password = Base64.getEncoder().encodeToString(pwdBytes);
+
+        Map<String, String> payLoad = new HashMap<>();
+        payLoad.put("BusinessShortCode", shortCode);
+        payLoad.put("Password", password);
+        payLoad.put("Timestamp", timeStamp);
+        payLoad.put("TransactionType", "CustomerPayBillOnline");
+        payLoad.put("Amount", amount);
+        payLoad.put("PartyA", phoneNumber);
+        payLoad.put("PartyB", "174379");
+        payLoad.put("PhoneNumber", "254790838747");
+        payLoad.put("CallBackURL", "https://miramsolutions.co.ke");
+        payLoad.put("AccountReference", "12345");
+        payLoad.put("TransactionDesc", "Payment of X");
+
+        JSONObject object = new JSONObject(payLoad);
+        MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
+
+        okhttp3.RequestBody body = okhttp3.RequestBody.create(object.toString(), mediaType);
 
         Request request = new Request.Builder()
                 .url("https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest")
-                .method("POST", body)
+                .post(body)
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer wiZRj2z7GUp3vVLTmsi68OtUtFRE")
+                .addHeader("Authorization", "Bearer VM8uDjO3z6KiMG0v7KtsPjJGDjhb")
                 .build();
 
-        return client.newCall(request).execute();
+        Response response = client.newCall(request).execute();
+
+        System.out.println(response.body().string());
+
+        return response;
     }
 }

@@ -4,7 +4,7 @@ public class Payment {
     private String emailAddress;
     private String phoneNumber;
     private String names;
-    private double amount;
+    private int amount;
 
     public String getEmailAddress() {
         return emailAddress;
@@ -30,11 +30,11 @@ public class Payment {
         this.names = names;
     }
 
-    public double getAmount() {
+    public int getAmount() {
         return amount;
     }
 
-    public void setAmount(double amount) {
+    public void setAmount(int amount) {
         this.amount = amount;
     }
 
